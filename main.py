@@ -1,7 +1,4 @@
-from statistics import correlation
-
 import pandas as pd
-from pandas.core.interchange.dataframe_protocol import DataFrame
 import sqlite3
 import os
 import numpy as np
@@ -229,7 +226,8 @@ def create_charts(dataframe, png_dir="images", html_dir="charts"):
                           textfont=dict(color='#0b0b0b'))
         fig.update_layout(bargap=0.45)
         # HTML fills the width of its container (iframe or page); toolbar hidden for a cleaner look
-        fig.write_html(os.path.join(html_dir, f"{name}.html"), include_plotlyjs='cdn',
+        # A fixed div_id keeps the file identical between runs (otherwise Plotly uses a random id)
+        fig.write_html(os.path.join(html_dir, f"{name}.html"), include_plotlyjs='cdn', div_id=name,
                        config={'responsive': True, 'displayModeBar': False},
                        default_width='100%', default_height=f"{fig.layout.height}px",
                        post_script=MOBILE_SCRIPT)
