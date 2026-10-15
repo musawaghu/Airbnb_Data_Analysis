@@ -117,7 +117,7 @@ def style_chart(fig, title, x_title, y_title, height):
     # Shared look for every chart: light background, thin gridlines, no legend
     fig.update_layout(
         title=dict(text=title, x=0, xanchor='left', font=dict(size=18, color='#0b0b0b')),
-        height=height, width=760, showlegend=False,
+        height=height, showlegend=False,
         plot_bgcolor='#fcfcfb', paper_bgcolor='#fcfcfb',
         font=dict(family='Arial', size=13, color='#52514e'),
         margin=dict(l=20, r=40, t=70, b=50),
@@ -126,6 +126,34 @@ def style_chart(fig, title, x_title, y_title, height):
     fig.update_xaxes(title=x_title, gridcolor='#e6e5e1', zeroline=False)
     fig.update_yaxes(title=y_title, gridcolor='#e6e5e1', zeroline=False)
     return fig
+
+
+# Runs inside each HTML chart: on narrow screens (phones) the title is split over two lines
+# and made smaller so it doesn't run off the edge. {plot_id} is filled in by Plotly.
+MOBILE_SCRIPT = """
+var gd = document.getElementById('{plot_id}');
+var fullTitle = gd.layout.title.text;
+var isSmall = null;
+function fitToScreen() {
+    var small = gd.clientWidth < 560;
+    if (small === isSmall) return;  // only relayout when crossing the breakpoint
+    isSmall = small;
+    var title = fullTitle;
+    if (small) {
+        var words = fullTitle.split(' ');
+        var mid = Math.ceil(words.length / 2);
+        title = words.slice(0, mid).join(' ') + '<br>' + words.slice(mid).join(' ');
+    }
+    Plotly.relayout(gd, {
+        'title.text': title,
+        'title.font.size': small ? 15 : 18,
+        'margin.t': small ? 85 : 70,
+        'margin.r': small ? 20 : 40
+    });
+}
+window.addEventListener('resize', fitToScreen);
+fitToScreen();
+"""
 
 
 def create_charts(dataframe, png_dir="images", html_dir="charts"):
@@ -200,8 +228,12 @@ def create_charts(dataframe, png_dir="images", html_dir="charts"):
                           texttemplate='$%{text:.0f}', textposition='outside', cliponaxis=False,
                           textfont=dict(color='#0b0b0b'))
         fig.update_layout(bargap=0.45)
-        fig.write_html(os.path.join(html_dir, f"{name}.html"), include_plotlyjs='cdn')
-        fig.write_image(os.path.join(png_dir, f"{name}.png"), scale=2)
+        # HTML fills the width of its container (iframe or page); toolbar hidden for a cleaner look
+        fig.write_html(os.path.join(html_dir, f"{name}.html"), include_plotlyjs='cdn',
+                       config={'responsive': True, 'displayModeBar': False},
+                       default_width='100%', default_height=f"{fig.layout.height}px",
+                       post_script=MOBILE_SCRIPT)
+        fig.write_image(os.path.join(png_dir, f"{name}.png"), width=760, scale=2)
     print(f"Charts saved to {html_dir}/ and {png_dir}/")
 
 
