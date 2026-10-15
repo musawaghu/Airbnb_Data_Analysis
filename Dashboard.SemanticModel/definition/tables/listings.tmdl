@@ -1,0 +1,179 @@
+table listings
+	lineageTag: eba179c0-b9b2-4e91-954a-890d83088d32
+
+	/// Number of listings (one row per listing)
+	measure Listings = COUNTROWS(listings)
+		formatString: #,0
+		lineageTag: 7d1e4a52-3c6b-4f0e-9a1d-2b8c5e6f7a01
+
+	/// Median nightly price; median is used because a few very expensive listings pull the average up
+	measure 'Median Price' = MEDIAN(listings[price])
+		formatString: \$#,0
+		lineageTag: 7d1e4a52-3c6b-4f0e-9a1d-2b8c5e6f7a02
+
+	/// Total number of reviews, a rough proxy for demand
+	measure 'Total Reviews' = SUM(listings[number_of_reviews])
+		formatString: #,0
+		lineageTag: 7d1e4a52-3c6b-4f0e-9a1d-2b8c5e6f7a03
+
+	/// Average days per year a listing is open for booking
+	measure 'Avg Availability (days)' = AVERAGE(listings[availability_365])
+		formatString: 0
+		lineageTag: 7d1e4a52-3c6b-4f0e-9a1d-2b8c5e6f7a04
+
+	column id
+		dataType: int64
+		formatString: 0
+		lineageTag: 0f3c6186-586b-40ba-abe0-0503c00cf81c
+		summarizeBy: none
+		sourceColumn: id
+
+		annotation SummarizationSetBy = User
+
+	column name
+		dataType: string
+		lineageTag: 2136f3eb-faa9-4e5b-8301-466dda93fe66
+		summarizeBy: none
+		sourceColumn: name
+
+		annotation SummarizationSetBy = Automatic
+
+	column host_id
+		dataType: int64
+		formatString: 0
+		lineageTag: 56a534b0-09ad-4a6f-ae69-47ba9ba492ef
+		summarizeBy: none
+		sourceColumn: host_id
+
+		annotation SummarizationSetBy = User
+
+	column neighbourhood_group
+		dataType: string
+		lineageTag: 1dc8a945-baa6-4e3e-a67b-b53e11a9c199
+		summarizeBy: none
+		sourceColumn: neighbourhood_group
+
+		annotation SummarizationSetBy = Automatic
+
+	column neighbourhood
+		dataType: string
+		lineageTag: c6df0ecc-fd84-4e8e-a291-7ec606dff871
+		summarizeBy: none
+		sourceColumn: neighbourhood
+
+		annotation SummarizationSetBy = Automatic
+
+	column latitude
+		dataType: double
+		lineageTag: 61371926-711a-4cda-8264-7d8f3f2ee1b6
+		dataCategory: Latitude
+		summarizeBy: none
+		sourceColumn: latitude
+
+		annotation SummarizationSetBy = User
+
+	column longitude
+		dataType: double
+		lineageTag: 9f1597fa-3b6a-46ce-b5bc-f46a0e259b9c
+		dataCategory: Longitude
+		summarizeBy: none
+		sourceColumn: longitude
+
+		annotation SummarizationSetBy = User
+
+	column room_type
+		dataType: int64
+		formatString: 0
+		lineageTag: c8ebd2ca-77e0-40c6-a16e-22573172a85e
+		summarizeBy: none
+		sourceColumn: room_type
+
+		annotation SummarizationSetBy = User
+
+	column price
+		dataType: double
+		lineageTag: 2ab97342-2440-41d3-8e16-c1e0df5d8bac
+		summarizeBy: none
+		sourceColumn: price
+
+		annotation SummarizationSetBy = User
+
+	column minimum_nights
+		dataType: int64
+		formatString: 0
+		lineageTag: 4b1bfc17-32c2-4821-a9ac-f9c2659967db
+		summarizeBy: none
+		sourceColumn: minimum_nights
+
+		annotation SummarizationSetBy = User
+
+	column number_of_reviews
+		dataType: int64
+		formatString: 0
+		lineageTag: 3c3481e5-d6cb-42f7-9b32-206fd4f94fb2
+		summarizeBy: none
+		sourceColumn: number_of_reviews
+
+		annotation SummarizationSetBy = User
+
+	column availability_365
+		dataType: int64
+		formatString: 0
+		lineageTag: 0d5f883d-c452-4f67-b2e8-eee98e9b8373
+		summarizeBy: none
+		sourceColumn: availability_365
+
+		annotation SummarizationSetBy = User
+
+	/// Readable label for room_type (0/1/2), added in Power Query
+	column 'Room Type'
+		dataType: string
+		lineageTag: 3a9e2f61-8b4d-4c7e-b0a5-6d1f2e3c4b05
+		summarizeBy: none
+		sourceColumn: Room Type
+
+		annotation SummarizationSetBy = Automatic
+
+	column host_name
+		dataType: string
+		lineageTag: 177212db-1b7e-4652-83ff-7deef3d22716
+		summarizeBy: none
+		sourceColumn: host_name
+
+		annotation SummarizationSetBy = Automatic
+
+	/// Average latitude of the listing's borough, so the map draws one bubble per borough
+	column borough_latitude = CALCULATE(AVERAGE(listings[latitude]), ALLEXCEPT(listings, listings[neighbourhood_group]))
+		lineageTag: 59d484e4-02c2-46b8-ab2b-54db16f50125
+		dataCategory: Latitude
+		summarizeBy: none
+
+		annotation SummarizationSetBy = User
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	/// Average longitude of the listing's borough, so the map draws one bubble per borough
+	column borough_longitude = CALCULATE(AVERAGE(listings[longitude]), ALLEXCEPT(listings, listings[neighbourhood_group]))
+		lineageTag: 8357fdcc-536a-490f-aa14-f9f80b04fe6e
+		dataCategory: Longitude
+		summarizeBy: none
+
+		annotation SummarizationSetBy = User
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	partition listings = m
+		mode: import
+		source =
+				let
+				    Source = Python.Execute("import pandas as pd#(lf)import sqlite3#(lf)conn = sqlite3.connect(r""C:\Users\Musa Waghu\PycharmProjects\Airbnb_Data_Analysis\airbnb.db"")#(lf)listings = pd.read_sql(""SELECT * FROM listings"", conn)"),
+				    listings1 = Source{[Name="listings"]}[Value],
+				    // The Python connector hands every column over as text, so set the real number types
+				    Typed = Table.TransformColumnTypes(listings1, {{"id", Int64.Type}, {"host_id", Int64.Type}, {"latitude", type number}, {"longitude", type number}, {"room_type", Int64.Type}, {"price", type number}, {"minimum_nights", Int64.Type}, {"number_of_reviews", Int64.Type}, {"availability_365", Int64.Type}}, "en-US"),
+				    // main.py stores room type as 0/1/2; turn it back into readable labels
+				    WithRoomType = Table.AddColumn(Typed, "Room Type", each if [room_type] = 0 then "Entire home/apt" else if [room_type] = 1 then "Private room" else "Shared room", type text)
+				in
+				    WithRoomType
+
+	annotation PBI_ResultType = Table
+

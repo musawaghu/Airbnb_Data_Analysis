@@ -6,6 +6,18 @@ An analysis of 48,895 New York City Airbnb listings using Python, SQL and Plotly
 
 **Data:** [New York City Airbnb Open Data](https://www.kaggle.com/datasets/dgomonov/new-york-city-airbnb-open-data) (Kaggle), a snapshot of listings from 2019.
 
+## Power BI Dashboard
+
+![Power BI dashboard](images/final_dashboard_screenshot_v2.png)
+
+The dashboard reads the cleaned SQLite database that `main.py` builds, so it shows the same 48,631 listings as the findings below. Each chart has a one-line takeaway under its title.
+
+- **KPIs:** total listings, median nightly price, total reviews and average days available per year
+- **Price:** median price by borough and by room type, with medians rather than averages so a few very expensive listings don't skew the result
+- **Market:** share of listings by room type, total reviews and availability by borough, and a map with one bubble per borough sized by its number of listings
+
+It is saved as a Power BI Project (`Dashboard.pbip`), which stores the report and data model as text files, so changes show up clearly in Git. The measures are in `Dashboard.SemanticModel/definition/tables/listings.tmdl` and the custom theme is in `Dashboard.Report/StaticResources/RegisteredResources/AirbnbLavender.json`.
+
 ## Key Findings
 
 Based on 48,631 listings after cleaning (see [Data Cleaning](#data-cleaning)). Prices are medians per night.
@@ -78,7 +90,7 @@ I **kept** the 36% of listings with 0 days of availability. The data can't tell 
 
 The charts above are made with Plotly in `main.py`. Running it saves each chart twice: as a PNG in `images/` and as an interactive HTML file in `charts/` (hover any bar or point for details). The interactive versions are also published with GitHub Pages, linked under each chart above, and can be embedded in a website with an `<iframe>`.
 
-An earlier version of the analysis was also built as a Power BI dashboard (`Dashboard.pbix`, requires Power BI Desktop).
+The [Power BI dashboard](#power-bi-dashboard) shows the main results on a single page.
 
 ## How to Run
 
@@ -88,3 +100,5 @@ python main.py
 ```
 
 This cleans `AB_NYC_2019.csv`, builds the SQLite database (`airbnb.db`), prints the SQL query results and regenerates the charts.
+
+To open the dashboard, run `main.py` first so `airbnb.db` exists, then open `Dashboard.pbip` in Power BI Desktop and click **Refresh**. The data loads through Power BI's Python connector, which needs a local Python install with pandas. The query points to `airbnb.db` with an absolute path, so after cloning, update that path under **Transform data**.

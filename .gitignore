@@ -6,3 +6,7 @@ airbnb.db
 
 # Local Claude Code instructions
 CLAUDE.md
+
+# Power BI project: machine-specific settings and cached data
+**/.pbi/localSettings.json
+**/.pbi/cache.abf
