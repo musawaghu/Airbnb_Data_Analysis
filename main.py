@@ -1,10 +1,11 @@
 from statistics import correlation
 
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
 from pandas.core.interchange.dataframe_protocol import DataFrame
 import sqlite3
+import os
+import numpy as np
+import plotly.express as px
 
 """
 Key Questions to Answer:
@@ -112,6 +113,98 @@ def run_sql_queries(db_path="airbnb.db"):
     return neighborhood_prices, highest_listing, room_type, price_reviews
 
 
+def style_chart(fig, title, x_title, y_title, height):
+    # Shared look for every chart: light background, thin gridlines, no legend
+    fig.update_layout(
+        title=dict(text=title, x=0, xanchor='left', font=dict(size=18, color='#0b0b0b')),
+        height=height, width=760, showlegend=False,
+        plot_bgcolor='#fcfcfb', paper_bgcolor='#fcfcfb',
+        font=dict(family='Arial', size=13, color='#52514e'),
+        margin=dict(l=20, r=40, t=70, b=50),
+        hoverlabel=dict(bgcolor='white', font_size=13),
+    )
+    fig.update_xaxes(title=x_title, gridcolor='#e6e5e1', zeroline=False)
+    fig.update_yaxes(title=y_title, gridcolor='#e6e5e1', zeroline=False)
+    return fig
+
+
+def create_charts(dataframe, png_dir="images", html_dir="charts"):
+    # Saves each chart as an interactive HTML file (for the website) and a PNG (for the README)
+    os.makedirs(png_dir, exist_ok=True)
+    os.makedirs(html_dir, exist_ok=True)
+    bar_color = '#2a78d6'
+
+    # Turn room_type back into readable labels for the charts
+    data = dataframe.copy()
+    data['room_label'] = data['room_type'].map({0: 'Entire home/apt', 1: 'Private room', 2: 'Shared room'})
+
+    charts = {}
+
+    # 1. Median price by room type
+    rooms = (data.groupby('room_label')
+             .agg(median_price=('price', 'median'), listings=('price', 'size'))
+             .sort_values('median_price').reset_index())
+    fig = px.bar(rooms, x='median_price', y='room_label', orientation='h', text='median_price',
+                 custom_data=['listings'])
+    fig.update_traces(hovertemplate='<b>%{y}</b><br>Median price: $%{x:.0f}<br>Listings: %{customdata[0]:,}<extra></extra>')
+    charts['price_by_room_type'] = style_chart(fig, 'Entire homes cost more than twice as much as private rooms',
+                                               'Median price per night ($)', None, 300)
+
+    # 2. Median price by borough
+    boroughs = (data.groupby('neighbourhood_group')
+                .agg(median_price=('price', 'median'), listings=('price', 'size'))
+                .sort_values('median_price').reset_index())
+    fig = px.bar(boroughs, x='median_price', y='neighbourhood_group', orientation='h', text='median_price',
+                 custom_data=['listings'])
+    fig.update_traces(hovertemplate='<b>%{y}</b><br>Median price: $%{x:.0f}<br>Listings: %{customdata[0]:,}<extra></extra>')
+    charts['price_by_borough'] = style_chart(fig, 'Manhattan is the most expensive borough',
+                                             'Median price per night ($)', None, 360)
+
+    # 3. Neighborhood supply vs price (only neighborhoods with 50+ listings, so averages are meaningful)
+    hoods = (data.groupby(['neighbourhood', 'neighbourhood_group'])
+             .agg(listings=('price', 'size'), median_price=('price', 'median'))
+             .reset_index())
+    hoods = hoods[hoods['listings'] >= 50]
+    fig = px.scatter(hoods, x='listings', y='median_price', log_x=True,
+                     custom_data=['neighbourhood', 'neighbourhood_group'])
+    fig.update_traces(marker=dict(size=10, color=bar_color, opacity=0.75, line=dict(width=1.5, color='#fcfcfb')),
+                      hovertemplate='<b>%{customdata[0]}</b> (%{customdata[1]})<br>'
+                                    'Listings: %{x:,}<br>Median price: $%{y:.0f}<extra></extra>')
+    # Label the busiest and most expensive neighborhoods (offsets in pixels keep labels from overlapping)
+    label_offsets = {'Williamsburg': (0, -30), 'Harlem': (-10, 45), 'Bedford-Stuyvesant': (-40, 45), 'Tribeca': (40, -15)}
+    for name, (ax, ay) in label_offsets.items():
+        row = hoods[hoods['neighbourhood'] == name].iloc[0]
+        fig.add_annotation(x=np.log10(row['listings']), y=row['median_price'], text=name,
+                           ax=ax, ay=ay, arrowcolor='#8a8984', arrowwidth=1, arrowhead=0,
+                           font=dict(size=12, color='#0b0b0b'))
+    fig.update_xaxes(tickvals=[50, 100, 200, 500, 1000, 2000, 4000])
+    charts['neighborhood_supply_vs_price'] = style_chart(
+        fig, 'The busiest neighborhoods are not the most expensive',
+        'Number of listings (log scale)', 'Median price per night ($)', 480)
+
+    # 4. Average price by number of reviews
+    bins = [-1, 0, 5, 20, 50, float('inf')]
+    labels = ['0', '1-5', '6-20', '21-50', '50+']
+    data['review_bucket'] = pd.cut(data['number_of_reviews'], bins=bins, labels=labels)
+    reviews = (data.groupby('review_bucket', observed=True)
+               .agg(avg_price=('price', 'mean'), listings=('price', 'size'))
+               .reset_index())
+    fig = px.bar(reviews, x='review_bucket', y='avg_price', text='avg_price', custom_data=['listings'])
+    fig.update_traces(hovertemplate='<b>%{x} reviews</b><br>Average price: $%{y:.0f}<br>Listings: %{customdata[0]:,}<extra></extra>')
+    charts['price_by_reviews'] = style_chart(fig, 'Listings with more reviews tend to be cheaper',
+                                             'Number of reviews', 'Average price per night ($)', 420)
+
+    # Bar styling shared by the bar charts: one color, value at the end of each bar
+    for name, fig in charts.items():
+        fig.update_traces(selector=dict(type='bar'), marker_color=bar_color, marker_cornerradius=4,
+                          texttemplate='$%{text:.0f}', textposition='outside', cliponaxis=False,
+                          textfont=dict(color='#0b0b0b'))
+        fig.update_layout(bargap=0.45)
+        fig.write_html(os.path.join(html_dir, f"{name}.html"), include_plotlyjs='cdn')
+        fig.write_image(os.path.join(png_dir, f"{name}.png"), scale=2)
+    print(f"Charts saved to {html_dir}/ and {png_dir}/")
+
+
 if __name__ == '__main__':
     uncleaned_df = pd.read_csv("AB_NYC_2019.csv")
 
@@ -161,3 +254,5 @@ if __name__ == '__main__':
     df_price_reviews = pd.DataFrame(price_reviews,
                                     columns=['Review Category', 'Listings', 'Avg Price', 'Avg Availability'])
     print(df_price_reviews)
+
+    create_charts(df)
