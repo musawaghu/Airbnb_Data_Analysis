@@ -207,17 +207,17 @@ def create_charts(dataframe, png_dir="images", html_dir="charts"):
         fig, 'The busiest neighborhoods are not the most expensive',
         'Number of listings (log scale)', 'Median price per night ($)', 480)
 
-    # 4. Average price by number of reviews
+    # 4. Median price by number of reviews
     bins = [-1, 0, 5, 20, 50, float('inf')]
     labels = ['0', '1-5', '6-20', '21-50', '50+']
     data['review_bucket'] = pd.cut(data['number_of_reviews'], bins=bins, labels=labels)
     reviews = (data.groupby('review_bucket', observed=True)
-               .agg(avg_price=('price', 'mean'), listings=('price', 'size'))
+               .agg(median_price=('price', 'median'), listings=('price', 'size'))
                .reset_index())
-    fig = px.bar(reviews, x='review_bucket', y='avg_price', text='avg_price', custom_data=['listings'])
-    fig.update_traces(hovertemplate='<b>%{x} reviews</b><br>Average price: $%{y:.0f}<br>Listings: %{customdata[0]:,}<extra></extra>')
-    charts['price_by_reviews'] = style_chart(fig, 'Listings with more reviews tend to be cheaper',
-                                             'Number of reviews', 'Average price per night ($)', 420)
+    fig = px.bar(reviews, x='review_bucket', y='median_price', text='median_price', custom_data=['listings'])
+    fig.update_traces(hovertemplate='<b>%{x} reviews</b><br>Median price: $%{y:.0f}<br>Listings: %{customdata[0]:,}<extra></extra>')
+    charts['price_by_reviews'] = style_chart(fig, 'Listings with no reviews are priced higher',
+                                             'Number of reviews', 'Median price per night ($)', 420)
 
     # Bar styling shared by the bar charts: one color, value at the end of each bar
     for name, fig in charts.items():
@@ -251,15 +251,29 @@ if __name__ == '__main__':
         'Private room': 1,
         'Shared room': 2
     }
-    pd.set_option('future.no_silent_downcasting', True)
     df['room_type'] = df['room_type'].replace(room_type_mapping).astype('int8')
 
-    ## 4. Seeing correlation between location(latitude & longitude), price, room type and number of reviews
-    df_subset = df[['latitude', 'longitude', 'price', 'room_type', 'number_of_reviews']]
-    correlation_matrix = df_subset.corr()
-    # print(correlation_matrix)
-    '''the correlation matrix doesnt show any meaningful correlation between these columns. I was expecting to see a
-    strong correlation between price and room type, or price and location but it looks like its not the case'''
+    ## 4. Remove listings that aren't realistic short-term rentals
+    rows_before = len(df)
+    df = df[df['price'] > 0]                # $0 prices are data entry errors
+    df = df[df['price'] <= 1000]            # extreme prices (up to $10,000/night) distort averages
+    df = df[df['minimum_nights'] <= 365]    # minimum stays over a year aren't short-term rentals
+    print(f"Removed {rows_before - len(df):,} unrealistic listings, {len(df):,} remain")
+    # Listings with 0 days of availability are kept: the data can't tell a fully booked listing
+    # from an inactive one, so removing them could drop some of the most popular listings
+
+    ## 5. Correlation between price, room type and number of reviews
+    df_subset = df[['price', 'room_type', 'number_of_reviews']]
+    print("\nPearson correlation (measures straight-line relationships, sensitive to outliers)")
+    print(df_subset.corr().round(2))
+    print("\nSpearman correlation (compares rankings, not affected by extreme prices)")
+    print(df_subset.rank().corr().round(2))
+    '''My first check used only Pearson correlation on the uncleaned data and showed a weak link between price and
+    room type (-0.25), so I thought room type didn't matter much. That was misleading for two reasons: a few listings
+    priced up to $10,000/night dragged the result toward zero, and room type is a category, not a number on a scale.
+    After cleaning, Pearson rises to -0.46, and Spearman correlation (which uses rankings) shows a strong relationship
+    (-0.68). The median prices by room type confirm it: entire homes cost more than twice as much as private rooms.
+    Number of reviews has almost no correlation with price (-0.05).'''
 
     setup_database(df)
 

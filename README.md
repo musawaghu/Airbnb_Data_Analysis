@@ -2,25 +2,43 @@ This project analyzes Airbnb listing data for New York City (2019) to uncover pr
 
 ## Key Findings
 
-Based on 48,895 listings. Prices are medians per night unless stated otherwise, because a few extreme listings (up to $10,000/night) push the averages up.
+Based on 48,631 listings after cleaning (see [Data Cleaning](#data-cleaning)). Prices are medians per night.
 
 1. **Room type matters more for price than anything else.** An entire home or apartment has a median price of $160, a private room $70 and a shared room $45. Entire homes make up 52% of listings and private rooms 46%. Shared rooms are only 2%.
 
    ![Median price by room type](images/price_by_room_type.png)
 
-2. **Manhattan and Brooklyn make up 85% of the market, and Manhattan costs much more.** The median is $150 in Manhattan, $90 in Brooklyn, $75 in Queens and Staten Island, and $65 in the Bronx.
+2. **Manhattan and Brooklyn make up 85% of the market, and Manhattan costs much more.** The median is $149 in Manhattan, $90 in Brooklyn, $75 in Queens and Staten Island, and $65 in the Bronx.
 
    ![Median price by borough](images/price_by_borough.png)
 
-3. **The neighborhoods with the most listings are not the most expensive.** Williamsburg (3,920 listings), Bedford-Stuyvesant (3,714) and Harlem (2,658) have the most supply, at medians of $80–$105. The most expensive neighborhoods are small, high-end areas of Manhattan: Tribeca has a median of $295 across 177 listings.
+3. **The neighborhoods with the most listings are not the most expensive.** Williamsburg (3,908 listings), Bedford-Stuyvesant (3,699) and Harlem (2,651) have the most supply, at medians of $80–$105. The most expensive neighborhoods are small, high-end areas of Manhattan: Tribeca has a median of $282 across 165 listings.
 
    ![Neighborhood listings vs median price](images/neighborhood_supply_vs_price.png)
 
-4. **Cheaper listings get more reviews.** Listings with no reviews average $193, while listings with 50+ reviews average $129. Since reviews are a rough measure of how often a listing is booked, this suggests guests prefer lower-priced listings. Overpriced listings may sit unbooked.
+4. **Listings with no reviews are priced about $20 higher, but beyond that, reviews don't track price.** Listings with no reviews have a median of $120, while every group with at least one review sits at $100–$108. One possible explanation is that new or overpriced listings struggle to get their first booking. This is a correlation, not proof of cause.
 
-   ![Average price by number of reviews](images/price_by_reviews.png)
+   ![Median price by number of reviews](images/price_by_reviews.png)
 
-**Data caveat:** 36% of listings show 0 days of availability, which suggests a large share of them were inactive. There are also 11 listings priced at $0. Neither group was removed for this analysis.
+## Recommendations
+
+- **Travelers on a budget:** a private room in Brooklyn (median $65) or Queens ($60) costs about a third of an entire home in Manhattan ($190).
+- **New hosts:** listings without reviews are priced above reviewed ones. Pricing near the neighborhood median until the first few reviews come in may help win early bookings.
+- **Hosts in Williamsburg, Bedford-Stuyvesant or Harlem:** these are the most crowded markets in the city, so competitive pricing and a strong listing matter more there than in areas with less supply.
+
+## Data Cleaning
+
+Before the analysis I removed 264 listings (0.5%) that don't represent realistic short-term rentals:
+
+| Removed | Count | Why |
+|---|---|---|
+| Price of $0 | 11 | Data entry errors |
+| Price over $1,000/night | 239 | Extreme values (up to $10,000) that distort averages and correlations |
+| Minimum stay over 365 nights | 14 | Not short-term rentals |
+
+I **kept** the 36% of listings with 0 days of availability. The data can't tell a fully booked listing apart from an inactive one, so removing them could drop some of the most popular listings.
+
+**Correcting my first conclusion:** my first correlation check on the uncleaned data showed only a weak link between price and room type (Pearson -0.25), which suggested room type didn't matter much. That was misleading: the extreme prices pulled the result toward zero, and room type is a category rather than a number on a scale. After cleaning, Pearson rises to -0.46, and Spearman correlation, which compares rankings and isn't thrown off by extreme values, shows a strong relationship (-0.68). The median prices in Finding 1 confirm it.
 
 ## Charts
 
