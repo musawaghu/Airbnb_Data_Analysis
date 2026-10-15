@@ -18,12 +18,15 @@ Key Questions to Answer:
 
 def setup_database(dataframe, db_name="airbnb.db"):
     conn = sqlite3.connect(db_name)
-    # Create table
+    # Start fresh each run so the table always matches the current cleaned data
+    conn.execute('DROP TABLE IF EXISTS listings')
+    # Create the table with an explicit schema (column types and a primary key on id)
     conn.execute('''
-        CREATE TABLE IF NOT EXISTS listings (
+        CREATE TABLE listings (
             id INTEGER PRIMARY KEY,
             name TEXT,
             host_id INTEGER,
+            host_name TEXT,
             neighbourhood_group TEXT,
             neighbourhood TEXT,
             latitude REAL,
@@ -36,8 +39,8 @@ def setup_database(dataframe, db_name="airbnb.db"):
         )
         ''')
 
-    # Insert data
-    dataframe.to_sql('listings', conn, if_exists='replace', index=False)
+    # Insert data into the table created above ('append' keeps the schema; 'replace' would drop it)
+    dataframe.to_sql('listings', conn, if_exists='append', index=False)
     conn.commit()
     conn.close()
     print(f"Database {db_name} created successfully")
