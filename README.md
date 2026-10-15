@@ -16,6 +16,10 @@ Based on 48,631 listings after cleaning (see [Data Cleaning](#data-cleaning)). P
 
    ![Neighborhood listings vs median price](images/neighborhood_supply_vs_price.png)
 
+   On a map, the most expensive neighborhoods cluster in Manhattan south of Central Park, while the largest markets (the biggest bubbles) are in north Brooklyn and Harlem at lower prices. Each bubble is one neighborhood: size shows the number of listings and color shows the median price.
+
+   ![Map of neighborhoods by median price and number of listings](images/neighborhood_map.png)
+
 4. **Listings with no reviews are priced about $20 higher, but beyond that, reviews don't track price.** Listings with no reviews have a median of $120, while every group with at least one review sits at $100–$108. One possible explanation is that new or overpriced listings struggle to get their first booking. This is a correlation, not proof of cause.
 
    ![Median price by number of reviews](images/price_by_reviews.png)

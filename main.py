@@ -257,12 +257,25 @@ function fitToScreen() {
         var mid = Math.ceil(words.length / 2);
         title = words.slice(0, mid).join(' ') + '<br>' + words.slice(mid).join(' ');
     }
-    Plotly.relayout(gd, {
+    var update = {
         'title.text': title,
         'title.font.size': small ? 15 : 18,
         'margin.t': small ? 85 : 70,
         'margin.r': small ? 20 : 40
-    });
+    };
+    // Charts with a color scale (the map): move the scale below the chart on phones so the map gets the full width
+    if (gd.layout.coloraxis) {
+        update['margin.r'] = 0;
+        update['margin.b'] = small ? 70 : 0;
+        update['coloraxis.colorbar.orientation'] = small ? 'h' : 'v';
+        update['coloraxis.colorbar.x'] = small ? 0.5 : 1.02;
+        update['coloraxis.colorbar.xanchor'] = small ? 'center' : 'left';
+        update['coloraxis.colorbar.y'] = small ? -0.02 : 0.5;
+        update['coloraxis.colorbar.yanchor'] = small ? 'top' : 'middle';
+        update['coloraxis.colorbar.len'] = small ? 0.9 : 0.6;
+        update['coloraxis.colorbar.title.side'] = small ? 'top' : 'right';
+    }
+    Plotly.relayout(gd, update);
 }
 window.addEventListener('resize', fitToScreen);
 fitToScreen();
@@ -335,6 +348,29 @@ def create_charts(dataframe, png_dir="images", html_dir="charts"):
     charts['price_by_reviews'] = style_chart(fig, 'Listings with no reviews are priced higher',
                                              'Number of reviews', 'Median price per night ($)', 420)
 
+    # 5. Map: one bubble per neighborhood, placed at the average location of its listings.
+    #    Bubble size = number of listings, color = median price (light blue = cheap, dark blue = expensive)
+    map_data = (data.groupby(['neighbourhood', 'neighbourhood_group'])
+                .agg(latitude=('latitude', 'mean'), longitude=('longitude', 'mean'),
+                     listings=('price', 'size'), median_price=('price', 'median'))
+                .reset_index())
+    # Minimum bubble size so neighborhoods with few listings are still visible (hover shows the real count)
+    map_data['bubble_size'] = map_data['listings'].clip(lower=150)
+    blue_scale = ['#9ec5f4', '#6da7ec', '#3987e5', '#256abf', '#184f95', '#0d366b']
+    fig = px.scatter_map(map_data, lat='latitude', lon='longitude', size='bubble_size', color='median_price',
+                         color_continuous_scale=blue_scale, range_color=[50, 250], size_max=28,
+                         custom_data=['neighbourhood', 'neighbourhood_group', 'listings'],
+                         map_style='carto-positron', zoom=9.6, center=dict(lat=40.69, lon=-73.96))
+    fig.update_traces(marker=dict(opacity=0.85),
+                      hovertemplate='<b>%{customdata[0]}</b> (%{customdata[1]})<br>'
+                                    'Median price: $%{marker.color:.0f}<br>Listings: %{customdata[2]:,}<extra></extra>')
+    charts['neighborhood_map'] = style_chart(fig, 'Prices are highest in Manhattan below Central Park',
+                                             None, None, 600)
+    fig.update_layout(margin=dict(l=0, r=0, t=70, b=0),
+                      coloraxis_colorbar=dict(title=dict(text='Median price', side='right'), tickprefix='$', thickness=12, len=0.6,
+                                              ticks='outside', tickvals=[50, 100, 150, 200, 250],
+                                              ticktext=['50', '100', '150', '200', '250+']))
+
     # Bar styling shared by the bar charts: one color, value at the end of each bar
     for name, fig in charts.items():
         fig.update_traces(selector=dict(type='bar'), marker_color=bar_color, marker_cornerradius=4,
@@ -344,7 +380,8 @@ def create_charts(dataframe, png_dir="images", html_dir="charts"):
         # HTML fills the width of its container (iframe or page); toolbar hidden for a cleaner look
         # A fixed div_id keeps the file identical between runs (otherwise Plotly uses a random id)
         fig.write_html(os.path.join(html_dir, f"{name}.html"), include_plotlyjs='cdn', div_id=name,
-                       config={'responsive': True, 'displayModeBar': False},
+                       # scrollZoom off so scrolling the page doesn't get stuck zooming the map
+                       config={'responsive': True, 'displayModeBar': False, 'scrollZoom': False},
                        default_width='100%', default_height=f"{fig.layout.height}px",
                        post_script=MOBILE_SCRIPT)
         fig.write_image(os.path.join(png_dir, f"{name}.png"), width=760, scale=2)
