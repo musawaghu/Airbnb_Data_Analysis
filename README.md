@@ -20,6 +20,14 @@ Based on 48,631 listings after cleaning (see [Data Cleaning](#data-cleaning)). P
 
    ![Median price by number of reviews](images/price_by_reviews.png)
 
+## SQL Highlights
+
+`run_advanced_sql_queries()` in `main.py` uses CTEs and window functions to answer three more questions:
+
+- **Who runs the market?** 86% of hosts have a single listing, but the other 14% control a third of all listings. Just 112 hosts (0.3%) have 10 or more listings each, together making up 6.5% of the market. *(CTEs + `SUM() OVER ()` for percentages of the total)*
+- **What's the priciest area in each borough?** The top neighborhoods by average price are Tribeca ($330) in Manhattan, Cobble Hill and DUMBO (tied at $196) in Brooklyn, and Far Rockaway ($166) in Queens, a beach area. *(`RANK() OVER (PARTITION BY borough ...)` for a top 3 per group)*
+- **What does each room type cost in each borough?** Calculated as medians, which SQLite has no built-in function for. A Manhattan entire home ($190) costs nearly three times a Brooklyn private room ($65). *(`ROW_NUMBER()` and `COUNT() OVER` to find the middle value)*
+
 ## Recommendations
 
 - **Travelers on a budget:** a private room in Brooklyn (median $65) or Queens ($60) costs about a third of an entire home in Manhattan ($190).

@@ -110,6 +110,122 @@ def run_sql_queries(db_path="airbnb.db"):
     return neighborhood_prices, highest_listing, room_type, price_reviews
 
 
+def run_advanced_sql_queries(db_path="airbnb.db"):
+    """
+    Three queries using CTEs and window functions.
+
+    CTE (Common Table Expression): the WITH ... AS (...) part. It creates a temporary, named result
+    that the rest of the query can use like a table. It lets you build a query in readable steps
+    instead of nesting subqueries inside each other.
+
+    Window function: a function followed by OVER (...). Unlike GROUP BY, it doesn't collapse rows.
+    Every row keeps its own values and also gets a value calculated across a group of rows (the "window").
+    PARTITION BY inside OVER (...) splits the rows into groups, a bit like GROUP BY does.
+    """
+    conn = sqlite3.connect(db_path)
+
+    # Query 1: The 3 most expensive neighborhoods in each borough
+    # Step 1 (CTE neighborhood_stats): one row per neighborhood with its listing count and average price.
+    #         HAVING drops neighborhoods with fewer than 20 listings, where an average isn't reliable.
+    # Step 2 (CTE ranked): RANK() numbers the neighborhoods 1, 2, 3... by price, starting again at 1
+    #         for each borough (PARTITION BY borough). If two neighborhoods tie they get the same rank
+    #         and the next rank is skipped (1, 1, 3), which is what happens with Cobble Hill and DUMBO.
+    # Step 3: keep only ranks 1-3. This filter can't go in the CTE that calculates the rank,
+    #         because SQL calculates window functions after WHERE.
+    top_by_borough = pd.read_sql('''
+        WITH neighborhood_stats AS (
+            SELECT
+                neighbourhood_group AS borough,
+                neighbourhood AS neighborhood,
+                COUNT(*) AS listings,
+                ROUND(AVG(price), 0) AS avg_price
+            FROM listings
+            GROUP BY neighbourhood_group, neighbourhood
+            HAVING COUNT(*) >= 20
+        ),
+        ranked AS (
+            SELECT
+                *,
+                RANK() OVER (PARTITION BY borough ORDER BY avg_price DESC) AS price_rank
+            FROM neighborhood_stats
+        )
+        SELECT borough, price_rank, neighborhood, listings, avg_price
+        FROM ranked
+        WHERE price_rank <= 3
+        ORDER BY borough, price_rank
+        ''', conn)
+
+    # Query 2: Median price for each borough and room type
+    # SQLite has no MEDIAN() function, so this calculates it with window functions.
+    # The median is the middle value once prices are sorted.
+    # Step 1 (CTE ordered): for each borough + room type group, ROW_NUMBER() gives every listing
+    #         its position in price order (1 = cheapest), and COUNT(*) OVER gives the group's size.
+    # Step 2: keep only the middle row(s). For a group of 5, (5+1)/2 = 3 and (5+2)/2 = 3 (integer
+    #         division), so only row 3 is kept. For a group of 6, the formulas give rows 3 and 4,
+    #         and AVG() averages those two middle prices, which is how a median works for even counts.
+    median_prices = pd.read_sql('''
+        WITH ordered AS (
+            SELECT
+                neighbourhood_group AS borough,
+                room_type,
+                price,
+                ROW_NUMBER() OVER (PARTITION BY neighbourhood_group, room_type ORDER BY price) AS row_num,
+                COUNT(*) OVER (PARTITION BY neighbourhood_group, room_type) AS group_size
+            FROM listings
+        )
+        SELECT
+            borough,
+            CASE room_type
+                WHEN 0 THEN 'Entire home/apt'
+                WHEN 1 THEN 'Private room'
+                WHEN 2 THEN 'Shared room'
+            END AS room_type,
+            group_size AS listings,
+            AVG(price) AS median_price
+        FROM ordered
+        WHERE row_num IN ((group_size + 1) / 2, (group_size + 2) / 2)
+        GROUP BY borough, room_type
+        ORDER BY borough, room_type
+        ''', conn)
+
+    # Query 3: How much of the market is run by hosts with many listings?
+    # Step 1 (CTE host_counts): one row per host with how many listings they have.
+    # Step 2 (CTE host_groups): put each host into a size group and add up hosts and listings per group.
+    # Step 3: SUM(...) OVER () with empty brackets means the window is every row, so it gives the
+    #         grand total. Dividing by it turns each group's count into a percentage of the total,
+    #         without needing a separate query to get the total.
+    host_concentration = pd.read_sql('''
+        WITH host_counts AS (
+            SELECT host_id, COUNT(*) AS listings_per_host
+            FROM listings
+            GROUP BY host_id
+        ),
+        host_groups AS (
+            SELECT
+                CASE
+                    WHEN listings_per_host = 1 THEN '1 listing'
+                    WHEN listings_per_host BETWEEN 2 AND 9 THEN '2-9 listings'
+                    ELSE '10+ listings'
+                END AS host_type,
+                COUNT(*) AS hosts,
+                SUM(listings_per_host) AS listings
+            FROM host_counts
+            GROUP BY host_type
+        )
+        SELECT
+            host_type,
+            hosts,
+            ROUND(100.0 * hosts / SUM(hosts) OVER (), 1) AS pct_of_hosts,
+            listings,
+            ROUND(100.0 * listings / SUM(listings) OVER (), 1) AS pct_of_listings
+        FROM host_groups
+        ORDER BY hosts DESC
+        ''', conn)
+
+    conn.close()
+    return top_by_borough, median_prices, host_concentration
+
+
 def style_chart(fig, title, x_title, y_title, height):
     # Shared look for every chart: light background, thin gridlines, no legend
     fig.update_layout(
@@ -298,5 +414,16 @@ if __name__ == '__main__':
     df_price_reviews = pd.DataFrame(price_reviews,
                                     columns=['Review Category', 'Listings', 'Avg Price', 'Avg Availability'])
     print(df_price_reviews)
+
+    top_by_borough, median_prices, host_concentration = run_advanced_sql_queries(db_path="airbnb.db")
+
+    print("\nTop 3 most expensive neighborhoods in each borough (20+ listings)")
+    print(top_by_borough)
+
+    print("\nMedian price by borough and room type")
+    print(median_prices)
+
+    print("\nShare of hosts and listings by how many listings each host has")
+    print(host_concentration)
 
     create_charts(df)
